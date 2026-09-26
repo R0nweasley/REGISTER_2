@@ -6,43 +6,74 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CourseRepository {
+
     private static final String FILE_PATH = "data/Course.csv";
 
-    // ฟังก์ชันดึงรายวิชาทั้งหมด (เพื่อเอาไปโชว์ใน JList)
+    // ดึงรายวิชาทั้งหมดในรูปแบบ "CourseID - CourseName"
     public List<String> getAllCourses() {
         List<String> courseList = new ArrayList<>();
+
         try (BufferedReader br = new BufferedReader(new FileReader(FILE_PATH))) {
             String line;
             br.readLine(); // ข้าม Header
-            
+
             while ((line = br.readLine()) != null) {
-                String[] data = line.split(",");
+                String[] data = line.split(",", -1);
+
                 if (data.length >= 2) {
-                    // นำ รหัสวิชา และ ชื่อวิชา มาต่อกันให้สวยงาม
-                    // เช่น "WIZ001 - WIZARD"
-                    courseList.add(data[0] + " - " + data[1]); 
+                    String courseId = data[0].trim();
+                    String courseName = data[1].trim();
+
+                    if (!courseId.isEmpty()) {
+                        courseList.add(courseId + " - " + courseName);
+                    }
                 }
             }
         } catch (Exception e) {
+            System.out.println("Cannot read Course.csv: " + FILE_PATH);
             e.printStackTrace();
         }
+
         return courseList;
     }
-    // ฟังก์ชันนี้รับ CourseID แล้วไปหาว่าวิชานี้ชื่ออะไร (ใช้แสดงในฝั่งขวา)
+
+    // รับ CourseID แล้วคืนชื่อวิชา
     public String getCourseNameById(String courseId) {
         try (BufferedReader br = new BufferedReader(new FileReader(FILE_PATH))) {
             String line;
             br.readLine(); // ข้าม Header
+
             while ((line = br.readLine()) != null) {
-                String[] data = line.split(",");
-                // โครงสร้าง Course.csv: CourseID(0), CourseName(1)
+                String[] data = line.split(",", -1);
+
                 if (data.length >= 2 && data[0].trim().equals(courseId.trim())) {
-                    return data[1].trim(); // เจอแล้ว คืนค่าชื่อวิชากลับไป
+                    return data[1].trim();
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return "Unknown Course"; // ถ้าหาไม่เจอ
+
+        return "Unknown Course";
+    }
+
+    // รับ CourseID แล้วคืนจำนวนหน่วยกิต
+    public int getCourseCreditById(String courseId) {
+        try (BufferedReader br = new BufferedReader(new FileReader(FILE_PATH))) {
+            String line;
+            br.readLine(); // ข้าม Header
+
+            while ((line = br.readLine()) != null) {
+                String[] data = line.split(",", -1);
+
+                if (data.length >= 3 && data[0].trim().equals(courseId.trim())) {
+                    return Integer.parseInt(data[2].trim());
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return 0;
     }
 }
