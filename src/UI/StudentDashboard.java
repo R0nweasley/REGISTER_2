@@ -17,12 +17,18 @@ public class StudentDashboard extends JFrame {
 
     private final DefaultTableModel availableModel = new DefaultTableModel(
             new Object[]{"Course ID", "Course Name", "Credit", "Action"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return column == 3; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
 
     private final DefaultTableModel enrolledModel = new DefaultTableModel(
             new Object[]{"Course ID", "Course Name", "Credit", "Action"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return column == 3; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
 
     private final JTable availableTable = new JTable(availableModel);
@@ -82,6 +88,25 @@ public class StudentDashboard extends JFrame {
         root.add(center, BorderLayout.CENTER);
         root.add(footer, BorderLayout.SOUTH);
         setContentPane(root);
+
+        // Double-click row to perform action.
+        availableTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    enrollSelected();
+                }
+            }
+        });
+
+        enrolledTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    withdrawSelected();
+                }
+            }
+        });
     }
 
     private JPanel createCoursePanel(String title, JTable table) {
@@ -110,14 +135,14 @@ public class StudentDashboard extends JFrame {
         enrolledModel.setRowCount(0);
 
         List<String> enrolledIds = enrollmentRepository.getEnrolledCourseIds(student.getID());
+        List<String> courses = courseRepository.getAllCourses();
 
-        // CourseRepository currently returns "courseID - name".
-        // Credit is read from Course.csv by the helper below so the existing repository is untouched.
-        for (String course : courseRepository.getAllCourses()) {
+        // แยกวิชาที่ลงทะเบียนแล้วออกจากวิชาที่ยังลงทะเบียนได้
+        for (String course : courses) {
             String[] parts = course.split(" - ", 2);
             String courseId = parts[0].trim();
             String courseName = parts.length > 1 ? parts[1].trim() : "";
-            String credit = getCredit(courseId);
+            int credit = courseRepository.getCourseCreditById(courseId);
 
             if (enrolledIds.contains(courseId)) {
                 enrolledModel.addRow(new Object[]{courseId, courseName, credit, "Withdraw"});
@@ -129,39 +154,23 @@ public class StudentDashboard extends JFrame {
         totalCreditsLabel.setText("Total Credits: " + calculateCredits(enrolledIds));
     }
 
-    private String getCredit(String courseId) {
-        // CourseRepository's existing public API exposes name lookup only.
-        // Keep the original Repository classes untouched and read the small CSV here.
-        try (java.io.BufferedReader br = new java.io.BufferedReader(
-                new java.io.FileReader("data/Course.csv"))) {
-            String line;
-            br.readLine();
-            while ((line = br.readLine()) != null) {
-                String[] data = line.split(",");
-                if (data.length >= 3 && data[0].trim().equals(courseId)) {
-                    return data[2].trim();
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return "-";
-    }
-
     private int calculateCredits(List<String> courseIds) {
         int total = 0;
+
         for (String id : courseIds) {
-            try {
-                total += Integer.parseInt(getCredit(id));
-            } catch (NumberFormatException ignored) {
-            }
+            total += courseRepository.getCourseCreditById(id);
         }
+
         return total;
     }
 
     private void enrollSelected() {
         int row = availableTable.getSelectedRow();
+
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Please select a course first.", "Enroll", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Please select a course first.",
+                    "Enroll", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -170,23 +179,31 @@ public class StudentDashboard extends JFrame {
         String credit = availableModel.getValueAt(row, 2).toString();
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "Register for " + courseId + " - " + courseName + " (" + credit + " credits)?",
+                "Register for " + courseId + " - " + courseName +
+                        " (" + credit + " credits)?",
                 "Confirm Enrollment", JOptionPane.YES_NO_OPTION);
 
         if (confirm == JOptionPane.YES_OPTION) {
             if (enrollmentRepository.enrollCourse(student.getID(), courseId)) {
-                JOptionPane.showMessageDialog(this, "Course registered successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Course registered successfully.",
+                        "Success", JOptionPane.INFORMATION_MESSAGE);
                 refreshTables();
             } else {
-                JOptionPane.showMessageDialog(this, "Could not register this course.", "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Could not register this course.",
+                        "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
     private void withdrawSelected() {
         int row = enrolledTable.getSelectedRow();
+
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Please select a course first.", "Withdraw", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Please select a course first.",
+                    "Withdraw", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -199,34 +216,27 @@ public class StudentDashboard extends JFrame {
 
         if (confirm == JOptionPane.YES_OPTION) {
             if (enrollmentRepository.withdrawCourse(student.getID(), courseId)) {
-                JOptionPane.showMessageDialog(this, "Course withdrawn successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Course withdrawn successfully.",
+                        "Success", JOptionPane.INFORMATION_MESSAGE);
                 refreshTables();
             } else {
-                JOptionPane.showMessageDialog(this, "Could not withdraw this course.", "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Could not withdraw this course.",
+                        "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
     private void logout() {
-        int confirm = JOptionPane.showConfirmDialog(this, "Logout from this account?", "Logout", JOptionPane.YES_NO_OPTION);
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Logout from this account?",
+                "Logout", JOptionPane.YES_NO_OPTION);
+
         if (confirm == JOptionPane.YES_OPTION) {
             dispose();
             loginFrame.clearFields();
             loginFrame.setVisible(true);
         }
-    }
-
-    // Double-click a row to perform the corresponding action.
-    {
-        availableTable.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (e.getClickCount() == 2) enrollSelected();
-            }
-        });
-        enrolledTable.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (e.getClickCount() == 2) withdrawSelected();
-            }
-        });
     }
 }
